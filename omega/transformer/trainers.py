@@ -65,13 +65,13 @@ class BestCheckpointTrainer:
 
         try:
             checkpoint = torch.load(destination)
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+            self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-            if self.scheduler is not None and 'scheduler_state_dict' in checkpoint:
-                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            if self.scheduler is not None and "scheduler_state_dict" in checkpoint:
+                self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-            loss = checkpoint['loss']
+            loss = checkpoint["loss"]
             self.logger.info(f"Loaded checkpoint from {destination} with loss {loss:.4f}")
         except KeyError as e:
             self.logger.error(f"Checkpoint at {destination} is corrupt: {e}")
