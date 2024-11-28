@@ -11,7 +11,7 @@ import torch.optim as optim
 from torch import Tensor
 from tqdm import tqdm
 
-from omega.typing import LRScheduler
+from omega.transformer.typing import LRScheduler
 
 
 @dataclass
