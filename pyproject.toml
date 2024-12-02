@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "omega"
 version = "0.1.0"
-description = ""
+description = "The Final Transformer"
 authors = ["Vlad Korol <chocolate.magnate@gmail.com>"]
 readme = "README.md"
 
@@ -14,6 +14,15 @@ tqdm = "^4.67.1"
 datasets = "^3.1.0"
 
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = "."
+addopts = [
+    "--import-mode=importlib",
+]
