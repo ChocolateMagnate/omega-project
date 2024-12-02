@@ -10,6 +10,9 @@
 .idea/
 .vscode/
 
+## Data
+/data/
+
 ## PyTorch
 
 .coverage
