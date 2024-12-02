@@ -11,6 +11,17 @@ def test_tokenizer_consistency():
     decoded = tokenizer.decode(encoded)
     assert decoded == input_string
 
+def test_tokenizer_batched_consistency():
+    tokenizer = OmegaTokenizer()
+    input_sequences = [
+        "Hello there!",
+        "General Kenobi!",
+        "You are a bold one!"
+    ]
+    encoded = tokenizer.encode_many(input_sequences)
+    decoded = tokenizer.decode_many(encoded)
+    assert decoded == input_sequences
+
 def test_tokenizer_bos_token():
     tokenizer = OmegaTokenizer()
     encoded = tokenizer.encode("Hello? Anybody home? Well you won't up then...")

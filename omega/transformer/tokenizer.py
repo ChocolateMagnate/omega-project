@@ -2,8 +2,8 @@ import os
 import multiprocessing
 
 import torch
-import sentencepiece as spm
 import datasets as ds
+import sentencepiece as spm
 
 import omega.transformer.cmd as cmd
 from omega.transformer.typing import Vector, Matrix
@@ -12,6 +12,7 @@ PAD_TOKEN_ID = 0
 UNK_TOKEN_ID = 1
 BOS_TOKEN_ID = 2
 EOS_TOKEN_ID = 3
+
 
 def fit_tokenizer_model():
     datasets = cmd.OMEGA_HUGGINGFACE_DATASETS.split(":")
@@ -24,9 +25,8 @@ def fit_tokenizer_model():
                 if str(feature).startswith("Value(dtype=\'string\'")
             ]
             for example in subset:
-                text = " ".join(str(example[col]) for col in text_columns)
+                text = " ".join(str(example[column]) for column in text_columns)
                 file.write(text + "\n")
-    
 
     spm.SentencePieceTrainer.Train(
         input=cmd.OMEGA_TOKENIZER_DATA,
@@ -52,9 +52,25 @@ class OmegaTokenizer:
     def encode(self, text: str) -> Vector:
         return torch.tensor(self.sp.Encode(text, add_bos=True, add_eos=False))
 
-
     def decode(self, output: Vector) -> str:
         return self.sp.Decode(output.cpu().tolist())
+
+    def encode_many(self, texts: list[str]) -> Matrix:
+        # Unfortunately, sentencepiece does not provide a simple or comprehensive way how to tokenize a batch of
+        # sequences at the same time, thus we are forced to cast all of it into sequential list processing. We
+        # encourage anyone for whom this may become an issue to employ a queue design pattern where while GPU is
+        # processing a batch, CPU would be tokenizing, which is viable since sentencepiece is optimized in C++.
+        sequences = [torch.tensor(self.sp.Encode(text, add_bos=True, add_eos=False))
+                     for text in texts]
+
+        return torch.nn.utils.rnn.pad_sequence(
+            sequences,
+            padding_value=PAD_TOKEN_ID,
+            batch_first=True
+        )
+
+    def decode_many(self, output: Matrix) -> list[str]:
+        return [self.decode(text) for text in output]
 
 
 if cmd.OMEGA_TOKENIZER_DATA is not None and not os.path.exists(cmd.OMEGA_TOKENIZER_PATH + ".model"):
