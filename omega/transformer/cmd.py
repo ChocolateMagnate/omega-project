@@ -6,10 +6,10 @@ OMEGA_TOKENIZER_PATH = environ.get("OMEGA_TOKENIZER_PATH")
 
 # The dataset to use to train the tokenizer. It should be representative of the kind of input the model
 # will be trained on, such as multiple natural and programming languages, and hosted on HuggingFace for
-# convenience. The default value is bigcode/starcoderdata because it provides mix of code and English
-# documentation, and for extending it into other languages, it should be changed. The number of chunks
-# to train on is configured with OMEGA_HUGGINGFACE_CHUNKS.
-OMEGA_HUGGINGFACE_DATASET = environ.get("OMEGA_HUGGINGFACE_DATASET", "bigcode/starcoderdata")
+# convenience. Multiple datasets can be enumerated with colon (:). The default dataset configuration is
+# the mix of WikiText2 and CodeSearchNet that gives model strong English and programming tokenization.
+# The number of chunks to train on is configured with OMEGA_HUGGINGFACE_CHUNKS.
+OMEGA_HUGGINGFACE_DATASETS = environ.get("OMEGA_HUGGINGFACE_DATASET", "mindchain/wikitext2:code-search-net/code_search_net")
 
 # The number of chunks to use to train the model from the OMEGA_HUGGINGFACE_DATASET dataset.
 OMEGA_HUGGINGFACE_CHUNKS = int(environ.get("OMEGA_HUGGINGFACE_CHUNKS", 100000))
