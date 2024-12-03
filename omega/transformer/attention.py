@@ -37,7 +37,7 @@ class LinearAttentionBlock(nn.Module):
         self.k_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
         self.q_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
 
-        self.kernel = layers.Highway(hp.HIDDEN_SIZE)
+        self.feature_map = layers.Highway(hp.HIDDEN_SIZE)
         self.out_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
 
     def forward(self, batch: Tensor) -> Tensor:
@@ -45,13 +45,26 @@ class LinearAttentionBlock(nn.Module):
         k = self.k_projection(batch)  # [batch_size, sequence_length, hidden_size]
         q = self.q_projection(batch)  # [batch_size, sequence_length, hidden_size]
 
-        k = self.kernel(k)            # [batch_size, sequence_length, hidden_size]
-        q = self.kernel(q)            # [batch_size, sequence_length, hidden_size]
+        k = self.feature_map(k)       # [batch_size, sequence_length, hidden_size]
+        q = self.feature_map(q)       # [batch_size, sequence_length, hidden_size]
 
         # Linear attention formula: φ(q) @ (φ(k) @ v)
         # This approximates softmax(QK^T)V while being linear in sequence length
         context = torch.bmm(k.transpose(1, 2), v)  # [batch_size, hidden_size, hidden_size]
-        attention = torch.bmm(q, context)          # [batch_size, sequence_length, hidden_size]
+        attention = torch.bmm(q, context)  # [batch_size, sequence_length, hidden_size]
         out = self.out_projection(attention)
         return out
 
+
+class LinearAttention(nn.Module):
+    def __init__(self, attention_layers: int):
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            LinearAttentionBlock()
+            for _ in range(attention_layers)
+        ])
+
+    def forward(self, x: Tensor) -> Tensor:
+        for block in self.blocks:
+            x = block(x)
+        return x
