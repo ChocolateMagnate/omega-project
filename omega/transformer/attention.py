@@ -51,7 +51,7 @@ class LinearAttentionBlock(nn.Module):
         # Linear attention formula: φ(q) @ (φ(k) @ v)
         # This approximates softmax(QK^T)V while being linear in sequence length
         context = torch.bmm(k.transpose(1, 2), v)  # [batch_size, hidden_size, hidden_size]
-        attention = torch.bmm(q, context)  # [batch_size, sequence_length, hidden_size]
+        attention = torch.bmm(q, context)          # [batch_size, sequence_length, hidden_size]
         out = self.out_projection(attention)
         return out
 
