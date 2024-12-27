@@ -8,6 +8,12 @@ from os import environ
 # the largest hidden size was set by Google PaLM model that used 18K hidden size.
 HIDDEN_SIZE = int(environ.get("OMEGA_HIDDEN_SIZE", 2048))
 
+# Represents the size of blocks images are broken down into and processed as tokens. This hyperparameter takes
+# its roots in vision transformers where AI is able to see and process images by breaking it into small blocks
+# called patches, where each patch is transformed into a hidden state vector that can be conceptually treated
+# as a token and be attended to. Patch size 16 was tested to be the most reliable and trustworthy.
+PATCH_SIZE = 16
+
 # Tile size determines how many tokens the key, query and value matrices will be divided into and stored in GPU SRAM.
 TILE_SIZE = int(environ.get("OMEGA_TILE_SIZE", 256))
 
