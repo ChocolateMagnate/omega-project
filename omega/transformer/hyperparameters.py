@@ -17,3 +17,16 @@ BOTTLENECK_SIZE = int(environ.get("OMEGA_BOTTLENECK_SIZE", 1000))
 # in the attention block. Research has shown that wider networks perform better than deeper, therefore it is a
 # worthwhile tradeoff to consider more shallow depth since hidden size, by default, already captures many nuances.
 HIGHWAY_DEPTH = int(environ.get("OMEGA_HIGHWAY_DEPTH", 2))
+
+# The size of vectors in the thought vector space. Larger thought sizes allow for more detailed and diverse thought
+# representations at the cost of significantly more parameters.
+THOUGHT_SIZE = int(environ.get("OMEGA_THOUGHT_SIZE", 50000))
+
+THOUGHT_RANK_SIZE = int(environ.get("OMEGA_THOUGHT_RANK_SIZE", 64))
+
+TOPIC_CLUSTER_SIZE = int(environ.get("OMEGA_THOUGHT_CLUSTER_SIZE", 64))
+
+HORIZON = int(environ.get("OMEGA_HORIZON"), 5)
+
+NUMBER_OF_EXPERTS = int(environ.get("OMEGA_NUMBER_OF_EXPERTS", 200))
+

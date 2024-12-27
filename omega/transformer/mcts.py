@@ -22,6 +22,7 @@ class MCTSStepBlock(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         return self.step(x) + self.projection(x)
 
+
 class MonteCarloTreeSearch(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, number_of_blocks: int = 3):
         super().__init__()
