@@ -1,66 +1,69 @@
+import math
+
 import torch
 import torch.nn as nn
 from torch import Tensor
 
-import omega.transformer.cmd as cmd
 import omega.transformer.hyperparameters as hp
-import omega.transformer.layers as layers
-from omega.transformer.tokenizer import PAD_TOKEN_ID
-from omega.transformer.typing import Vector
 
 
-class FactorizedEmbeddings(nn.Module):
-    def __init__(self):
+class FlashAttentionBlock(nn.Module):
+    def __init__(self, streams: list[list[torch.cuda.Stream]]):
         super().__init__()
-        self.embeddings = nn.Embedding(
-            num_embeddings=cmd.OMEGA_TOKENIZER_VOCABULARY_SIZE,
-            embedding_dim=hp.BOTTLENECK_SIZE,
-            padding_idx=PAD_TOKEN_ID
-        )
 
-        self.expansion = nn.Linear(
-            in_features=hp.BOTTLENECK_SIZE,
-            out_features=hp.HIDDEN_SIZE,
-            bias=False  # Following PaLM example, we don't use bias.
-        )
+        self.streams = streams
+        # Scale is used to prevent dor product between key and query vectors to grow too large.
+        self.scale = 1.0 / math.sqrt(hp.HIDDEN_SIZE)
 
-    def forward(self, input_ids: Vector) -> Tensor:
-        compressed_embeddings = self.embeddings(input_ids)
-        expanded_embeddings = self.expansion(compressed_embeddings)
-        return expanded_embeddings
-
-
-class LinearAttentionBlock(nn.Module):
-    def __init__(self):
-        super().__init__()
         self.v_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
         self.k_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
         self.q_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
-
-        self.feature_map = layers.Highway(hp.HIDDEN_SIZE)
         self.out_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
 
     def forward(self, batch: Tensor) -> Tensor:
+        batch_size, sequence_length, _ = batch.shape
+        number_of_tiles = (sequence_length + hp.TILE_SIZE - 1) // hp.TILE_SIZE
+
         v = self.v_projection(batch)  # [batch_size, sequence_length, hidden_size]
         k = self.k_projection(batch)  # [batch_size, sequence_length, hidden_size]
         q = self.q_projection(batch)  # [batch_size, sequence_length, hidden_size]
 
-        k = self.feature_map(k)       # [batch_size, sequence_length, hidden_size]
-        q = self.feature_map(q)       # [batch_size, sequence_length, hidden_size]
+        output = torch.zeros_like(q)
+        normalizing_factor = torch.zeros((batch_size, sequence_length, 1))
 
-        # Linear attention formula: φ(q) @ (φ(k) @ v)
-        # This approximates softmax(QK^T)V while being linear in sequence length
-        context = torch.bmm(k.transpose(1, 2), v)  # [batch_size, hidden_size, hidden_size]
-        attention = torch.bmm(q, context)          # [batch_size, sequence_length, hidden_size]
-        out = self.out_projection(attention)
+        for q_tile_idx in range(number_of_tiles):
+            q_start_idx = q_tile_idx * hp.TILE_SIZE
+            q_end_idx = min(q_start_idx + hp.TILE_SIZE, sequence_length)
+            q_tile = q[:, q_start_idx:q_end_idx]  # [batch_size, tile_size, hidden_size]
+
+            for kv_tile_idx in range(number_of_tiles):
+                kv_start_idx = kv_tile_idx * hp.TILE_SIZE
+                kv_end_idx = min(kv_start_idx + hp.TILE_SIZE, sequence_length)
+
+                stream = self.streams[q_tile_idx][kv_tile_idx]
+                with torch.cuda.stream(stream):
+                    k_tile = k[:, kv_start_idx:kv_end_idx]  # [batch_size, tile_size, hidden_size]
+                    v_tile = v[:, kv_start_idx:kv_end_idx]  # [batch_size, tile_size, hidden_size]
+
+                    attention_scores = torch.bmm(q_tile, k_tile.transpose(-2, -1)) * self.scale
+                    attention_weights = torch.softmax(attention_scores, dim=-1)
+                    weighted_value_vectors = torch.bmm(attention_weights, v_tile)
+
+                    output[:, q_start_idx:q_end_idx] += weighted_value_vectors
+                    normalizing_factor[:, q_start_idx:q_end_idx] += attention_weights.sum(dim=-1, keepdim=True)
+
+        torch.cuda.synchronize()
+        output = output / (normalizing_factor + 1e-6)
+        out = self.out_projection(output)
         return out
 
 
-class LinearAttention(nn.Module):
+class FlashAttention(nn.Module):
     def __init__(self, attention_layers: int):
         super().__init__()
+        self.streams = [[torch.cuda.Stream() for _ in range(hp.TILE_SIZE)] for _ in range(hp.TILE_SIZE)]
         self.blocks = nn.ModuleList([
-            LinearAttentionBlock()
+            FlashAttentionBlock(self.streams)
             for _ in range(attention_layers)
         ])
 
