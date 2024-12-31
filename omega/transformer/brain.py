@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.jit as jit
 import torch.nn.functional as F
 from torch import Tensor
 
@@ -55,19 +56,31 @@ class MixtureOfExperts(nn.Module):
     def __init__(self):
         super().__init__()
         self.router = Router()
-        self.experts = nn.ModuleList([layers.Highway(hp.HORIZON, hp.THOUGHT_SIZE, hp.THOUGHT_RANK_SIZE)
-                                     for _ in range(hp.NUMBER_OF_EXPERTS)])
+        self.experts = nn.ModuleList([
+            layers.Highway(hp.HORIZON, hp.THOUGHT_SIZE, hp.THOUGHT_RANK_SIZE)
+            for _ in range(hp.NUMBER_OF_EXPERTS)
+        ])
 
-    def forward(self, last_hidden_states: Tensor) -> Tensor:
-        chosen_expert_probabilities, chosen_expert_indices = self.router(last_hidden_states)
-        outputs = torch.zeros(torch.Size(hp.NUMBER_OF_EXPERTS))
-        for chosen_expert_index in chosen_expert_indices:
-            with torch.cuda.Stream():
-                expert = self.experts[chosen_expert_index]
-                output = expert(last_hidden_states)
-                outputs[chosen_expert_index] = output
-        torch.cuda.synchronize()
+    @jit.script_method
+    def forward(self, premise: Tensor) -> Tensor:
+        chosen_expert_probabilities, chosen_expert_indices = self.router(premise)
 
+        consensus = torch.zeros_like(premise)
+        expert_futures = []
+
+        for expert_idx, expert in enumerate(self.experts):
+            expert_mask = (chosen_expert_indices == expert_idx)
+            tokens_for_expert = premise[expert_mask]
+
+            if tokens_for_expert.size(0) > 0:
+                future = jit.fork(expert, tokens_for_expert)
+                expert_futures.append((future, expert_mask, expert_idx))
+
+        for future, expert_mask, expert_idx in expert_futures:
+            expert_output = jit.wait(future)
+            consensus[expert_mask] = expert_output * chosen_expert_probabilities[expert_mask, expert_idx].unsqueeze(-1)
+
+        return consensus
 
 
 
@@ -79,4 +92,7 @@ class Brain(nn.Module):
         self.decoder = Decoder()
 
     def forward(self, last_hidden_states: Tensor) -> Tensor:
-        token_thought_states = self.encoder(last_hidden_states)
+        premise = self.encoder(last_hidden_states).mean(dim=-1)
+        conclusion = self.moe(premise)
+        final_states = self.decoder(conclusion)
+        return final_states
