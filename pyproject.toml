@@ -1,29 +1,14 @@
-[tool.poetry]
-name = "omega"
+[project]
+name = "omega-project"
 version = "0.1.0"
-description = "The Final Transformer"
-authors = ["Vlad Korol <chocolate.magnate@gmail.com>"]
+description = "Add your description here"
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.11"
-torch = "^2.4.1"
-sentencepiece = "^0.2.0"
-wandb = "^0.18.7"
-tqdm = "^4.67.1"
-datasets = "^3.1.0"
-pillow = "^11.0.0"
-
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.4"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.pytest.ini_options]
-pythonpath = "."
-addopts = [
-    "--import-mode=importlib",
+requires-python = ">=3.13"
+dependencies = [
+    "datasets>=3.2.0",
+    "pillow>=11.1.0",
+    "sentencepiece>=0.2.0",
+    "torch>=2.6.0",
+    "tqdm>=4.67.1",
+    "wandb>=0.19.5",
 ]

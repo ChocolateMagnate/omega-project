@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from omega.transformer.typing import Vector
 
 class LowRankLinear(nn.Module):
     def __init__(self, in_features: int, out_features: int, rank_features: int | None = None):
@@ -41,12 +42,15 @@ class Highway(nn.Module):
     def __init__(self, depth: int, hidden_features: int, rank_features: int | None = None,
                  activation: nn.Module = nn.GELU, bias: float = -1.0):
         super().__init__()
+        self.depth = depth
         self.race = nn.ModuleList(
             [HighwayLayer(hidden_features, rank_features, activation, bias)
              for _ in range(depth)]
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        for highway in self.race:
+    def forward(self, x: Tensor) -> tuple[Tensor, Vector]:
+        steps = torch.tensor(self.depth)
+        for idx, highway in enumerate(self.race):
             x = highway(x)
-        return x
+            steps[idx] = x
+        return x, steps

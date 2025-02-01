@@ -1,0 +1,15 @@
+{
+  "Omega-500M": {
+    "hidden_size": 1024,
+    "attention_heads": 32,
+    "attention_layers": 20,
+    "attention_dropout_rate": 0.1,
+    "number_of_heads": 16,
+    "head_size": 64,
+    "thought_size": 4096,
+    "thought_rank_size": 2048,
+    "number_of_experts": 8,
+    "horizon": 5,
+    "patch_size": 16
+  }
+}

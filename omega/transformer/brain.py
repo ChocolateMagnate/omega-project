@@ -36,9 +36,9 @@ class Decoder(nn.Module):
 class Router(nn.Module):
     def __init__(self):
         super().__init__()
-        self.centroids = nn.Parameter(torch.rand(hp.NUMBER_OF_EXPERTS, hp.TOPIC_CLUSTER_SIZE))
+        self.centroids = nn.Parameter(torch.rand(hp.NUMBER_OF_EXPERTS, hp.NUMBER_OF_EXPERTS))
         self.distillation = nn.Sequential(
-            nn.Linear(hp.HIDDEN_SIZE, hp.TOPIC_CLUSTER_SIZE),
+            nn.Linear(hp.HIDDEN_SIZE, hp.NUMBER_OF_EXPERTS),
             nn.GELU()
         )
 
@@ -66,6 +66,7 @@ class MixtureOfExperts(nn.Module):
         chosen_expert_probabilities, chosen_expert_indices = self.router(premise)
 
         consensus = torch.zeros_like(premise)
+        
         expert_futures = []
 
         for expert_idx, expert in enumerate(self.experts):
@@ -77,11 +78,10 @@ class MixtureOfExperts(nn.Module):
                 expert_futures.append((future, expert_mask, expert_idx))
 
         for future, expert_mask, expert_idx in expert_futures:
-            expert_output = jit.wait(future)
+            expert_output, expert_thought_trajectory = jit.wait(future)
             consensus[expert_mask] = expert_output * chosen_expert_probabilities[expert_mask, expert_idx].unsqueeze(-1)
 
         return consensus
-
 
 
 class Brain(nn.Module):
@@ -90,9 +90,13 @@ class Brain(nn.Module):
         self.encoder = Encoder()
         self.moe = MixtureOfExperts()
         self.decoder = Decoder()
+        self.normalization = nn.LayerNorm(hp.HIDDEN_SIZE)
 
-    def forward(self, last_hidden_states: Tensor) -> Tensor:
-        premise = self.encoder(last_hidden_states).mean(dim=-1)
+    def forward(self, last_hidden_states: Tensor) -> tuple[Tensor, Vector]:
+        token_thought_vectors = self.encoder(last_hidden_states)
+        premise = token_thought_vectors.mean(dim=-1)
         conclusion = self.moe(premise)
-        final_states = self.decoder(conclusion)
-        return final_states
+        enriched_states = token_thought_vectors * conclusion
+        activations = self.decoder(enriched_states)
+        activations = self.normalization(activations)
+        return activations, conclusion
