@@ -1,29 +1,11 @@
-import contextlib
+import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch import Tensor
+from flash_attn import flash_attn_func
 
 import omega.transformer.hyperparameters as hp
-from omega.transformer.typing import Vector
-
-
-@contextlib.contextmanager
-def best_attention_backend(vector: Vector):
-    is_flash_attention_available = (
-        torch.cuda.is_available() and
-        vector.dtype in [torch.float16, torch.bfloat16] and
-        all(dim % 8 == 0 for dim in vector.shape[-2:]) and
-        vector.is_cuda
-    )
-
-    if is_flash_attention_available:
-        with nn.attention.sdpa_kernel(enable_flash=True):
-            yield
-    else:
-        with nn.attention.sdpa_kernel(enable_mem_efficient=True):
-            yield
 
 
 class FlashAttentionLayer(nn.Module):
@@ -34,7 +16,6 @@ class FlashAttentionLayer(nn.Module):
         self.k_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
         self.q_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
         self.out_projection = nn.Linear(hp.HIDDEN_SIZE, hp.HIDDEN_SIZE)
-        self.dropout = nn.Dropout(hp.ATTENTION_DROPOUT_RATE)
 
     def forward(self, batch: Tensor) -> Tensor:
         assert batch.dim() == 3, f"Expected 3D tensor, got {batch.dim()}D"
@@ -48,15 +29,15 @@ class FlashAttentionLayer(nn.Module):
         k = self.k_projection(batch).view(batch_size, sequence_length, hp.NUMBER_OF_HEADS, hp.HEAD_SIZE).transpose(1, 2)
         q = self.q_projection(batch).view(batch_size, sequence_length, hp.NUMBER_OF_HEADS, hp.HEAD_SIZE).transpose(1, 2)
 
-        with best_attention_backend(q):
-            # Every day, I pray to Lord for blessing PyTorch with this function.
-            attentions = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        attention = flash_attn_func(q, k, v, hp.ATTENTION_DROPOUT_RATE,
+                                    softmax_scale=1.0/math.sqrt(hp.HEAD_SIZE),
+                                    causal=True)
 
-        transposition = attentions.transpose(1, 2).contiguous()
+        transposition = attention.transpose(1, 2).contiguous()
         recombination = transposition.view(batch_size, sequence_length, hp.HIDDEN_SIZE)
 
         out = self.out_projection(recombination)
-        return self.dropout(out + residual)
+        return out + residual
 
 
 class FlashAttention(nn.Module):
