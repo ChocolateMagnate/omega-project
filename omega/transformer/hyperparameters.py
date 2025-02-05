@@ -33,3 +33,4 @@ HORIZON = int(environ.get("OMEGA_HORIZON", 5))
 
 NUMBER_OF_EXPERTS = int(environ.get("OMEGA_NUMBER_OF_EXPERTS", 8))
 
+GRPO_GROUP_SIZE = int(environ.get("OMEGA_GRPO_GROUP_SIZE", 64))
